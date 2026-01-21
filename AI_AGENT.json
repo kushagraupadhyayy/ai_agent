@@ -1,0 +1,264 @@
+{
+  "name": "AI AGENT",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1792,
+        -448
+      ],
+      "id": "78e758e7-2089-4ae4-a975-01836ba97c89",
+      "webhookId": "b43eb65b-8920-49fc-a122-95a915a592d2"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "system_prompt",
+              "value": "={\n  \"body\": {\n    \"message\": \"hello\"\n  },\n  \"system_prompt\": \"You are a disciplined AI agent...\"\n}"
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": false
+        }
+      },
+      "name": "Agent_Personality",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -1424,
+        -320
+      ],
+      "id": "d7b93f6d-218e-4dc8-8674-1893b47f749e"
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "responseDataSource": "set",
+        "inputFieldName": "=data",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "ai_text",
+                "value": "={{ $json.ai_text }}"
+              },
+              {
+                "name": "Access-Control-Expose-Headers",
+                "value": "ai_text"
+              }
+            ]
+          }
+        }
+      },
+      "name": "Respond_To_User",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        -224
+      ],
+      "id": "db6bde16-9409-4bbd-87ce-6b01b5ead77b",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.message }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -1152,
+        -240
+      ],
+      "id": "899fadfe-c15b-4092-afa5-6c8053d1879b",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1152,
+        -80
+      ],
+      "id": "784f5598-cd1d-492d-adec-db765e709444",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "394tUPpmkGbrVaS1",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/qFwAIpwqlpqZbTYpttVi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xi-api-key",
+              "value": "INSERT_YOUR_ELEVEN_LABS_API_KEY_HERE"
+            },
+            {
+              "name": "Content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "audio/mpeg"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model_id",
+              "value": "eleven_multilingual_v2"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.ai_text }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -768,
+        -176
+      ],
+      "id": "5d620b78-efaf-4798-912c-7e091ce506f7",
+      "name": "HTTP Request",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4ef20163-1486-4b1f-85d5-8c510618da7b",
+              "name": "ai_text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -768,
+        -384
+      ],
+      "id": "06e94696-0fea-41e1-8ae0-84db7e63f059",
+      "name": "AI TEXT"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Agent_Personality",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent_Personality": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "AI TEXT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Respond_To_User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI TEXT": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0298ae12-67ac-4cea-9351-3d1616dcdd22",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "84918b06749bb60224838ab0674780b948e5ef50df514015c59ce6123add6f77"
+  },
+  "id": "E0TNJdFFvkdVzOXM",
+  "tags": []
+}

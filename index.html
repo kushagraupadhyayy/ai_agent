@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>AI Agent</title>
+
+<style>
+:root{
+  --bg:#0b0f1a;
+  --panel:rgba(255,255,255,0.08);
+  --border:rgba(255,255,255,0.12);
+  --idle:#9aa4bf;
+  --listen:#4fc3f7;
+  --think:#ffb74d;
+  --speak:#81c784;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;height:100vh;
+  background:radial-gradient(circle at top,#121833,var(--bg));
+  font-family:system-ui,sans-serif;color:#eee;
+}
+.app{
+  display:grid;
+  grid-template-columns:1.3fr 420px 1fr;
+  gap:12px;height:100vh;padding:12px;
+}
+.panel{
+  background:var(--panel);
+  backdrop-filter:blur(18px);
+  border:1px solid var(--border);
+  border-radius:16px;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+header{
+  padding:12px 16px;
+  font-size:12px;
+  color:#9aa4bf;
+  border-bottom:1px solid var(--border);
+}
+
+/* Chat*/
+.chat{
+  flex:1;padding:16px;
+  overflow-y:auto;
+  display:flex;flex-direction:column;gap:12px;
+}
+.row{display:flex;gap:8px}
+.row.user{justify-content:flex-end}
+.row.ai{justify-content:flex-start}
+.avatar{
+  width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;
+}
+.avatar.user{background:#4fc3f7;color:#000}
+.avatar.ai{background:#394057}
+.msg{
+  max-width:70%;
+  padding:12px 14px;
+  border-radius:16px;
+  font-size:14px;
+  white-space:pre-wrap;
+}
+.msg.user{background:#4fc3f7;color:#000}
+.msg.ai{background:#2a2f45;border:1px solid var(--border)}
+
+/*  */
+.center{align-items:center;justify-content:center}
+.core{
+  width:140px;height:140px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:48px;cursor:pointer;
+}
+.state{margin-top:12px;font-weight:600}
+.stop{
+  margin-top:16px;
+  padding:10px 22px;
+  border:none;border-radius:20px;
+  background:linear-gradient(135deg,#ff5252,#e53935);
+  color:white;font-weight:600;
+}
+
+/* Dashboard */
+.status{padding:16px;display:flex;flex-direction:column;gap:12px}
+.card{
+  background:rgba(255,255,255,0.06);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px;
+}
+.small{font-size:12px;color:#9aa4bf}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <div class="panel">
+    <header>CONVERSATION</header>
+    <div class="chat" id="chat"></div>
+  </div>
+
+  <div class="panel center">
+    <div class="core" id="core">🧠</div>
+    <div class="state" id="stateLabel">IDLE</div>
+    <button class="stop" onclick="forceStop()">STOP</button>
+  </div>
+
+  <div class="panel">
+    <header>AGENT STATUS</header>
+    <div class="status" id="status"></div>
+  </div>
+
+</div>
+
+<script>
+const webhookUrl = "http://localhost:5678/webhook-test/agent";
+
+let state="IDLE", audio=null, audioUnlocked=false, isProcessing=false, turns=0;
+
+const core = document.getElementById("core");
+const stateLabel = document.getElementById("stateLabel");
+const chat = document.getElementById("chat");
+const status = document.getElementById("status");
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const rec = new SR();
+rec.lang="en-US";
+
+function setState(s){
+  state=s;
+  stateLabel.innerText=s;
+  renderStatus();
+}
+
+function renderStatus(){
+  status.innerHTML=`
+    <div class="card"><b>ISABELLA</b><div class="small">Voice AI Agent</div></div>
+    <div class="card"><b>State</b><br>${state}</div>
+    <div class="card"><b>Turns</b><br>${turns}</div>
+  `;
+}
+
+function add(text,type){
+  const row=document.createElement("div");
+  row.className=`row ${type}`;
+  const avatar=document.createElement("div");
+  avatar.className=`avatar ${type}`;
+  avatar.innerText=type==="user"?"U":"AI";
+  const msg=document.createElement("div");
+  msg.className=`msg ${type}`;
+  msg.innerText=text;
+  type==="user"?row.append(msg,avatar):row.append(avatar,msg);
+  chat.appendChild(row);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+function startListening(){
+  if(isProcessing) return;
+  setState("LISTENING");
+  rec.start();
+}
+
+rec.onresult = async (e)=>{
+  if(isProcessing) return;
+  isProcessing=true;
+  turns++;
+
+  const text=e.results[0][0].transcript;
+  add(text,"user");
+  add("⏳ Thinking…","ai");
+  setState("THINKING");
+
+  try{
+    const r=await fetch(webhookUrl,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({message:text})
+    });
+
+    // Header Text
+    const ai_text = r.headers.get("ai_text") || "🎙 Speaking…";
+    chat.lastChild.querySelector(".msg").innerText = ai_text;
+
+    // Body Audio
+    const blob = await r.blob();
+    playAudio(blob);
+
+  }catch{
+    chat.lastChild.querySelector(".msg").innerText="⚠️ Error";
+    isProcessing=false;
+    setState("IDLE");
+  }
+};
+
+function playAudio(blob){
+  if(!audioUnlocked) return;
+  if(audio) audio.pause();
+  audio=new Audio(URL.createObjectURL(blob));
+  setState("SPEAKING");
+  audio.onended=()=>{audio=null;isProcessing=false;startListening();};
+  audio.play().catch(()=>{});
+}
+
+function forceStop(){
+  if(audio) audio.pause();
+  rec.abort();
+  audio=null;
+  isProcessing=false;
+  setState("IDLE");
+}
+
+core.onclick=()=>{
+  audioUnlocked=true;
+  const unlock=new Audio();
+  unlock.muted=true;
+  unlock.play().catch(()=>{});
+  startListening();
+};
+
+setState("IDLE");
+</script>
+</body>
+</html>
